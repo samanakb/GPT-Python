@@ -1,0 +1,159 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import yfinance as yf
+import pandas as pd
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+# Global variables for data
+current_data = None
+current_data_type = None  # 'historical' or 'financial'
+current_holders_data = None
+
+# Validate the stock ticker
+def validate_ticker(ticker):
+    try:
+        stock = yf.Ticker(ticker)
+        stock.info
+        return True
+    except:
+        return False
+
+# Fetch stock data
+def fetch_data():
+    global current_data, current_data_type
+    ticker = ticker_entry.get()
+    
+    if not validate_ticker(ticker):
+        messagebox.showerror("Error", "Invalid Ticker")
+        return
+    
+    loading_label.config(text="Loading...")
+    fetch_holders_data(ticker)
+    data_type = data_type_var.get()
+    stock = yf.Ticker(ticker)
+    
+    if data_type == "Historical Data":
+        period = period_var.get()
+        current_data = stock.history(period=period)
+        current_data.reset_index(inplace=True)
+        current_data_type = 'historical'
+    else:  # Financial Data
+        if data_type == "Financials":
+            current_data = stock.financials
+        elif data_type == "Income Statement":
+            current_data = stock.quarterly_financials
+        current_data_type = 'financial'
+    
+    text_output.delete(1.0, tk.END)
+    text_output.insert(tk.END, current_data.to_string())
+    loading_label.config(text="")
+    plot_data()
+
+# Fetch holders data
+def fetch_holders_data(ticker):
+    global current_holders_data
+    stock = yf.Ticker(ticker)
+    current_holders_data = stock.get_major_holders()
+    text_holders.delete(1.0, tk.END)
+    text_holders.insert(tk.END, current_holders_data.to_string())
+
+# Plot stock data
+def plot_data():
+    global current_data, current_data_type
+    
+    if current_data is not None and current_data_type == 'historical':
+        chart_type = chart_type_var.get()
+        fig = Figure(figsize=(8, 5), dpi=100)
+        plot = fig.add_subplot(1, 1, 1)
+        plot.set_title('Historical Close Prices')
+        plot.set_xlabel('Date')
+        plot.set_ylabel('Close Price')
+        
+        ax2 = plot.twinx()
+        ax2.set_ylabel('Volume')
+        
+        if chart_type == "Line Chart":
+            plot.plot(current_data['Date'], current_data['Close'], label='Close Price', color='b')
+            ax2.bar(current_data['Date'], current_data['Volume'], label='Volume', alpha=0.3, color='g')
+        else:
+            plot.bar(current_data['Date'], current_data['Close'], label='Close Price', alpha=0.7, color='b')
+            ax2.bar(current_data['Date'], current_data['Volume'], label='Volume', alpha=0.3, color='g')
+
+        canvas = FigureCanvasTkAgg(fig, master=window)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=2, column=0)
+
+# Tkinter GUI Setup
+window = tk.Tk()
+window.title("Stock Data Viewer")
+
+# Configure grid weights
+window.grid_rowconfigure(0, weight=1)
+window.grid_columnconfigure(0, weight=1)
+window.grid_columnconfigure(1, weight=1)
+
+# Control frame
+frame_controls = ttk.Frame(window)
+frame_controls.grid(row=0, column=0, columnspan=2, sticky='nsew')
+
+# Control frame
+frame_controls = ttk.Frame(window)
+frame_controls.grid(row=0, column=0, columnspan=2)
+
+label_ticker = ttk.Label(frame_controls, text="Ticker:")
+label_ticker.pack(side=tk.LEFT)
+
+ticker_entry = ttk.Entry(frame_controls)
+ticker_entry.pack(side=tk.LEFT)
+
+label_data_type = ttk.Label(frame_controls, text="Data Type:")
+label_data_type.pack(side=tk.LEFT)
+
+data_type_var = tk.StringVar()
+data_type_var.set("Historical Data")
+
+data_type_menu = ttk.OptionMenu(frame_controls, data_type_var, "Historical Data", "Financials", "Income Statement")
+data_type_menu.pack(side=tk.LEFT)
+
+label_period = ttk.Label(frame_controls, text="Period:")
+label_period.pack(side=tk.LEFT)
+
+period_var = tk.StringVar()
+period_var.set("1mo")
+
+period_menu = ttk.OptionMenu(frame_controls, period_var, "1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "max")
+period_menu.pack(side=tk.LEFT)
+
+fetch_button = ttk.Button(frame_controls, text="Fetch Data", command=fetch_data)
+fetch_button.pack(side=tk.LEFT)
+
+chart_type_var = tk.StringVar()
+chart_type_var.set("Line Chart")
+
+chart_type_menu = ttk.OptionMenu(frame_controls, chart_type_var, "Line Chart", "Bar Chart")
+chart_type_menu.pack(side=tk.LEFT)
+
+loading_label = ttk.Label(frame_controls, text="")
+loading_label.pack(side=tk.LEFT)
+
+# Text frame for data output
+frame_text = ttk.Frame(window)
+frame_text.grid(row=1, column=0, sticky='nsew')
+frame_text.grid_rowconfigure(0, weight=1)
+frame_text.grid_columnconfigure(0, weight=1)
+
+text_output = tk.Text(frame_text, wrap=tk.NONE)
+text_output.grid(row=0, column=0, sticky='nsew')
+
+# Text frame for holders data
+frame_holders = ttk.Frame(window)
+frame_holders.grid(row=1, column=1, sticky='nsew')
+frame_holders.grid_rowconfigure(0, weight=1)
+frame_holders.grid_columnconfigure(0, weight=1)
+
+text_holders = tk.Text(frame_holders, wrap=tk.NONE)
+text_holders.grid(row=0, column=0, sticky='nsew')
+
+# Run Tkinter event loop
+window.mainloop()
