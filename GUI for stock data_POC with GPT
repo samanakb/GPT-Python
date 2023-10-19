@@ -1,3 +1,27 @@
+# Author: Saman Akbarian
+
+# Description:
+This script creates a Tkinter-based application for viewing stock data.
+It allows the user to fetch and view different types of stock-related data,
+including historical price data, financial statements, and major holders of the stock.
+The data is fetched from Yahoo Finance using the yfinance library and can be displayed
+in both tabular and graphical formats.
+
+Dependencies:
+- tkinter
+- yfinance
+- pandas
+- matplotlib
+
+Functions:
+- validate_ticker(ticker): Validates the stock ticker input by the user.
+- fetch_data(): Fetches the stock data based on the user's input and updates the display.
+- fetch_holders_data(ticker): Fetches the major holders of the stock.
+- plot_data(): Plots the historical stock data.
+
+
+
+
 import tkinter as tk
 from tkinter import ttk, messagebox
 import yfinance as yf
