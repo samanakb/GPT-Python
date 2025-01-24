@@ -1,0 +1,123 @@
+import openai
+import yfinance as yf
+import matplotlib.pyplot as plt
+import tkinter as tk
+from tkinter import simpledialog, messagebox
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+# Initiera DeepSeek-klient
+client = openai.OpenAI(api_key="", base_url="https://api.deepseek.com")
+
+# Funktion för att anropa DeepSeek Reasoner
+def deepseek_reasoning(messages, context_data):
+    try:
+        # Lägg till aktiedata som del av meddelandena
+        messages.insert(0, {"role": "system", "content": f"Here is the stock data context: {context_data}"})
+        
+        # Skicka förfrågan till API:et
+        response = client.chat.completions.create(
+            model="deepseek-reasoner",
+            messages=messages
+        )
+        # Extrahera Reasoning Content (CoT) och slutligt svar
+        reasoning_content = response.choices[0].message.reasoning_content
+        content = response.choices[0].message.content
+        return reasoning_content, content
+    except Exception as e:
+        print(f"Error during API call: {e}")
+        return None, None
+
+# Funktion för att hämta aktiedata
+def fetch_stock_data(ticker, period):
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period=period)
+        return hist
+    except Exception as e:
+        print(f"Error fetching stock data: {e}")
+        return None
+
+# Funktion för att visualisera aktiedata
+def visualize_stock_data(hist, ticker, parent_frame):
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(hist.index, hist['Close'], label='Close Price')
+    ax.set_title(f"Stock Prices for {ticker}")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Close Price")
+    ax.legend()
+    ax.grid()
+
+    # Integrera visualiseringen i Tkinter
+    canvas = FigureCanvasTkAgg(fig, master=parent_frame)
+    canvas.draw()
+    canvas.get_tk_widget().pack()
+
+# UI för att ställa frågor
+class StockApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Stock Data Analyzer")
+        
+        tk.Label(root, text="Enter Stock Ticker:").pack()
+        self.ticker_entry = tk.Entry(root)
+        self.ticker_entry.pack()
+
+        tk.Label(root, text="Select Time Period:").pack()
+        self.period_var = tk.StringVar(value="1mo")
+        tk.OptionMenu(root, self.period_var, "1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max").pack()
+
+        self.plot_frame = tk.Frame(root)
+        self.plot_frame.pack()
+
+        self.fetch_button = tk.Button(root, text="Fetch and Visualize Data", command=self.fetch_and_visualize)
+        self.fetch_button.pack()
+
+        self.question_button = tk.Button(root, text="Ask a Question", command=self.ask_question)
+        self.question_button.pack()
+        self.question_button.config(state=tk.DISABLED)
+
+        self.messages = []
+        self.stock_data_context = None
+
+    def fetch_and_visualize(self):
+        ticker = self.ticker_entry.get()
+        period = self.period_var.get()
+        
+        if not ticker:
+            messagebox.showerror("Error", "Please enter a stock ticker")
+            return
+
+        hist = fetch_stock_data(ticker, period)
+        if hist is not None:
+            self.stock_data_context = hist.to_dict()
+            for widget in self.plot_frame.winfo_children():
+                widget.destroy()  # Rensa tidigare plot
+            visualize_stock_data(hist, ticker, self.plot_frame)
+            self.messages.append({"role": "system", "content": f"Stock data for {ticker} has been loaded."})
+            self.question_button.config(state=tk.NORMAL)  # Aktivera frågeknappen
+        else:
+            messagebox.showerror("Error", "Could not fetch stock data.")
+
+    def ask_question(self):
+        if not self.stock_data_context:
+            messagebox.showerror("Error", "Please fetch stock data first.")
+            return
+
+        question = simpledialog.askstring("Ask a Question", "What do you want to know about the stock data?")
+        if not question:
+            return
+
+        self.messages.append({"role": "user", "content": question})
+        reasoning_content, content = deepseek_reasoning(self.messages, self.stock_data_context)
+
+        if reasoning_content and content:
+            messagebox.showinfo("Answer", content)
+            self.messages.append({"role": "assistant", "content": content})
+        else:
+            messagebox.showerror("Error", "Could not get an answer from the reasoning model.")
+
+# Starta UI
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = StockApp(root)
+    root.mainloop()
